@@ -1,0 +1,57 @@
+# Exiora AI - Next Gen Multimodal Chatbot Requirements
+# Launched by Saad Sadik Shaikh | AI & DS Student from Pune
+
+# Core Streamlit Framework
+streamlit>=1.28.0
+streamlit-option-menu>=0.3.6
+
+# AI/ML Libraries - Multi-Model Support
+openai>=1.3.0                    # GPT-4, DALL-E, Whisper, TTS
+google-generativeai>=0.3.0       # Gemini AI
+groq>=0.4.0                      # Grok AI
+
+# Text-to-Speech Libraries
+gTTS>=2.3.0                      # Google Text-to-Speech
+pyttsx3>=2.90                    # Offline TTS engine
+
+# Image Processing
+Pillow>=10.0.0                   # Image manipulation
+opencv-python>=4.8.0             # Computer vision
+
+# Audio Processing
+SpeechRecognition>=3.10.0        # Speech-to-text
+pydub>=0.25.1                    # Audio file processing
+pyaudio>=0.2.11                  # Audio I/O
+
+# Data Processing & Analysis
+pandas>=2.0.0                    # Data manipulation
+numpy>=1.24.0                    # Numerical computing
+requests>=2.31.0                 # HTTP requests
+
+# Environment & Configuration
+python-dotenv>=1.0.0             # Environment variables
+
+# File Handling & Utilities
+pathlib>=1.0.1                   # Path operations
+uuid>=1.30                       # Unique identifiers
+
+# JSON & Data Serialization
+jsonschema>=4.17.0               # JSON validation
+
+# Logging & Monitoring
+loguru>=0.7.0                    # Advanced logging
+
+# Performance Optimization
+cachetools>=5.3.0                # Caching utilities
+
+# Security
+cryptography>=41.0.0             # Encryption
+
+# Additional Utilities
+typing-extensions>=4.7.0         # Type hints
+dataclasses>=0.6                 # Data classes
+
+# Development Dependencies (Optional)
+# pytest>=7.4.0                 # Testing framework
+# black>=23.0.0                  # Code formatting
+# flake8>=6.0.0                  # Linting
