@@ -1,0 +1,18 @@
+# Minimal Requirements for Basic Deployment
+# Use this for initial deployment testing
+
+# Core Framework
+streamlit==1.28.1
+
+# Essential AI Libraries
+openai==1.3.5
+google-generativeai==0.3.2
+
+# Basic Dependencies
+python-dotenv==1.0.0
+requests==2.31.0
+Pillow==10.0.1
+
+# Optional: Add more as needed
+# groq==0.4.1
+# streamlit-option-menu==0.3.6

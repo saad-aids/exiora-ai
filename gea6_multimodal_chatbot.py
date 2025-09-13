@@ -1,7 +1,6 @@
 """
-Exiora AI - Next Gen Multimodal AI Chatbot
-Launched by Saad Sadik Shaikh - AI & DS Student from Pune
-Advanced conversational AI with text, image, and voice capabilities
+GEA-6 Next Gen Multimodal AI Chatbot (Streamlit App Entrypoint)
+Minimal but complete app using updated utils/api_clients and utils/speech_utils
 """
 
 import streamlit as st
@@ -19,16 +18,6 @@ import tempfile
 
 
 def _init_state():
-    """
-    Initialize Streamlit session state variables for the application.
-    
-    This function sets up the core data structures needed for:
-    - Chat history storage
-    - Generated images collection
-    - Conversation management
-    
-    Called once at the start of each session to ensure clean state.
-    """
     if "chat_history" not in st.session_state:
         st.session_state.chat_history = []
     if "generated_images" not in st.session_state:
@@ -36,148 +25,67 @@ def _init_state():
     if "conversations" not in st.session_state:
         st.session_state.conversations = {}
 
-# Configuration Constants
-MAX_CHAT_MESSAGES = 500  # Maximum number of chat messages to keep in memory
+MAX_CHAT_MESSAGES = 500
 
-# AI Model Capability Matrix
-# Defines which features each AI provider supports
+# Capability matrix
 CAPABILITIES = {
-    "OpenAI": {"text": True, "image": True, "vision": True, "stt": True},    # Full feature support
-    "Gemini": {"text": True, "image": False, "vision": True, "stt": False},  # No image generation or STT
-    "GROK":   {"text": True, "image": False, "vision": False, "stt": False}, # Text generation only
+    "OpenAI": {"text": True, "image": True, "vision": True, "stt": True},
+    "Gemini": {"text": True, "image": False, "vision": True, "stt": False},
+    "GROK":   {"text": True, "image": False, "vision": False, "stt": False},
 }
 
 def ensure_capability(provider: str, capability: str) -> bool:
-    """
-    Check if a specific AI provider supports a given capability.
-    
-    Args:
-        provider (str): The AI provider name (OpenAI, Gemini, GROK)
-        capability (str): The capability to check (text, image, vision, stt)
-    
-    Returns:
-        bool: True if the provider supports the capability, False otherwise
-        
-    Side Effects:
-        Shows a warning message if the capability is not supported
-    """
     supported = CAPABILITIES.get(provider, {}).get(capability, False)
     if not supported:
         st.warning(f"{provider} does not support {capability}. Please switch provider.")
     return supported
 
 def validate_model_features(model_name: str, feature_type: str) -> bool:
-    """
-    Validate if a model supports a specific feature type.
-    
-    Args:
-        model_name (str): Name of the AI model/provider
-        feature_type (str): Type of feature to validate (text, image, vision, stt)
-    
-    Returns:
-        bool: True if the model supports the feature, False otherwise
-    """
+    """Public helper: whether model supports a feature."""
     return CAPABILITIES.get(model_name, {}).get(feature_type, False)
 
 def handle_api_errors(error_msg: str, model_name: str) -> str:
-    """
-    Convert technical API errors into user-friendly messages.
-    
-    Args:
-        error_msg (str): The raw error message from the API
-        model_name (str): Name of the AI provider that generated the error
-    
-    Returns:
-        str: User-friendly error message with actionable advice
-    """
+    """Return user-friendly error messages based on provider and error string."""
     lower = (error_msg or "").lower()
-    
-    # Gemini-specific error handling
     if model_name == "Gemini":
         if "timeout" in lower or "deadline" in lower:
             return "Gemini timed out. Please retry, simplify input, or check your network."
         return "Gemini error occurred. Verify API key and try again."
-    
-    # Groq-specific error handling
     if model_name == "Groq":
         if "invalid" in lower:
             return "Groq request invalid. Check prompt and API permissions."
         return "Groq service error. Please retry or switch model."
-    
-    # OpenAI-specific error handling
     if model_name == "OpenAI":
         if "rate" in lower:
             return "OpenAI rate-limited. Wait a moment and retry."
         if "key" in lower:
             return "OpenAI API key issue. Verify key in .env or Streamlit secrets."
         return "OpenAI error. Please retry."
-    
-    # Generic error fallback
     return "An error occurred. Please retry."
 
 def reset_conversation():
-    """
-    Reset the chat conversation history.
-    
-    Clears the chat history while preserving generated images
-    for potential bulk export functionality.
-    """
     st.session_state.chat_history = []
-    # Note: Generated images are preserved for bulk export functionality
+    # do not clear generated images by default; it's useful for bulk export
 
-def show_error(message: str, hint: str = None):
-    """
-    Display error messages with optional hints to the user.
-    
-    Args:
-        message (str): The main error message to display
-        hint (str, optional): Additional helpful hint for the user
-    """
+def show_error(message: str, hint: str=None):
     st.error(f"Error: {message}")
     if hint:
         st.caption(f"Hint: {hint}")
 
-def append_chat(role: str, content: str, meta: dict = None):
-    """
-    Add a new message to the chat history with automatic cleanup.
-    
-    Args:
-        role (str): The role of the message sender ('user' or 'assistant')
-        content (str): The message content
-        meta (dict, optional): Additional metadata for the message
-    
-    Side Effects:
-        - Adds message to session state chat history
-        - Maintains MAX_CHAT_MESSAGES limit by removing oldest messages
-        - Stores last assistant message for TTS functionality
-    """
+def append_chat(role: str, content: str, meta: dict=None):
     msg = {"role": role, "content": content, "ts": datetime.now().isoformat()}
     if meta:
         msg.update(meta)
-    
     st.session_state.chat_history.append(msg)
-    
-    # Maintain message limit by keeping only the most recent messages
     if len(st.session_state.chat_history) > MAX_CHAT_MESSAGES:
         st.session_state.chat_history = st.session_state.chat_history[-MAX_CHAT_MESSAGES:]
-    
-    # Store last assistant message for TTS functionality
     if role == "assistant":
         st.session_state["last_bot"] = content
 
 def synthesize_tts(text: str) -> bytes | None:
-    """
-    Generate speech audio from text using OpenAI's TTS API.
-    
-    Args:
-        text (str): The text to convert to speech
-    
-    Returns:
-        bytes | None: MP3 audio bytes if successful, None if failed
-        
-    Note:
-        Requires OpenAI API key and openai package installation.
-        Falls back gracefully with user-friendly error messages.
+    """Create speech audio from text using OpenAI TTS if available.
+
+    Returns mp3 bytes or None on failure (with a user-facing error).
     """
     try:
         import openai
@@ -206,27 +114,9 @@ def synthesize_tts(text: str) -> bytes | None:
     return None
 
 def synthesize_tts_any(text: str, preferred_engine: str = "auto") -> tuple[bytes | None, str, str]:
-    """
-    Generate TTS audio using multiple available engines with fallback support.
-    
-    Args:
-        text (str): The text to convert to speech
-        preferred_engine (str): Preferred TTS engine ("openai", "gtts", "pyttsx3", or "auto")
-    
-    Returns:
-        tuple[bytes | None, str, str]: (audio_bytes, mime_type, engine_used)
-        
-    Engine Priority:
-        1. Preferred engine (if specified and available)
-        2. OpenAI TTS (requires API key)
-        3. gTTS (requires internet connection)
-        4. pyttsx3 (offline, system-dependent)
-        
-    Note:
-        Each engine has different output formats:
-        - OpenAI: MP3
-        - gTTS: MP3
-        - pyttsx3: WAV
+    """Generate TTS audio bytes and mime using available engines.
+
+    Order: preferred -> OpenAI -> gTTS -> pyttsx3. Returns (audio_bytes, mime, engine_used).
     """
     engines = []
     if preferred_engine != "auto":
@@ -318,22 +208,9 @@ def _sidebar():
     return model, theme, language
 
 def render_settings_card() -> tuple[str, str, str]:
-    """
-    Render the top-of-page settings card with modern styling and instant updates.
-    
-    Creates a visually distinct card containing:
-    - AI model selection (OpenAI, Gemini, Grok)
-    - Theme selection (Light, Dark)
-    - Language selection (13 Indian languages)
-    
-    Returns:
-        tuple[str, str, str]: (selected_model, selected_theme, selected_language)
-        
-    Features:
-        - Modern card design with gradient background and shadows
-        - Instant updates across the entire application
-        - Persistent settings via session state
-        - Responsive column layout
+    """Top-of-page, visually distinct settings card with instant updates.
+
+    Returns (model, theme, language)
     """
     # Inject minimal CSS once for a modern card look
     if not st.session_state.get("_settings_css_injected"):
@@ -367,7 +244,7 @@ def render_settings_card() -> tuple[str, str, str]:
         st.markdown(
             """
             <div class="gea6-settings-card">
-              <div class="gea6-settings-title">⚙️ Exiora AI Settings</div>
+              <div class="gea6-settings-title">⚙️ GEA-6 Settings</div>
               <div class="gea6-settings-subtle">Configure your AI model, theme, and language. Changes apply instantly.</div>
             </div>
             """,
@@ -421,24 +298,7 @@ def render_settings_card() -> tuple[str, str, str]:
 
 
 def _labels(language: str):
-    """
-    Get localized UI labels based on the selected language.
-    
-    Args:
-        language (str): The selected language name (e.g., "English", "Hindi", "Marathi")
-    
-    Returns:
-        dict: Dictionary containing all UI labels in the selected language
-        
-    Supported Languages:
-        - English (default)
-        - Hindi, Marathi, Bengali, Tamil, Telugu, Gujarati
-        - Kannada, Malayalam, Punjabi, Urdu, Odia, Assamese
-        
-    Note:
-        Falls back to English if the selected language is not found.
-        Each language dictionary contains 30+ UI strings for complete localization.
-    """
+    # Centralized UI labels per selected language. Defaults to English.
     en = {
         "tab_text": " Text Chat",
         "tab_img_gen": "Image Generator",
@@ -556,64 +416,13 @@ def _labels(language: str):
         "generating_speech": "स्पीच बना रहा है...",
         "generating_speech_file": "स्पीच फ़ाइल बना रहा है...",
     }
-    bn = {  # Bengali
-        "tab_text": " টেক্সট চ্যাট", "tab_img_gen": "ছবি জেনারেটর", "tab_img_qa": "ছবি প্রশ্নোত্তর", "tab_voice": "ভয়েস চ্যাট",
-        "refresh": "রিফ্রেশ", "txt_in": "আপনার প্রশ্ন টাইপ করুন:", "send": "পাঠান", "generate_image": "ছবি তৈরি করুন",
-        "tts_play": "AI উত্তর প্লে (TTS)", "transcribe_and_ask": "ট্রান্সক্রিপ্ট এবং জিজ্ঞাসা করুন"
-    }
-    ta = {  # Tamil
-        "tab_text": " உரை அரட்டை", "tab_img_gen": "படம் ஜெனரேட்டர்", "tab_img_qa": "படம் கேள்வி பதில்", "tab_voice": "குரல் அரட்டை",
-        "refresh": "புதுப்பிக்க", "txt_in": "உங்கள் கேள்வியை தட்டச்சு செய்யுங்கள்:", "send": "அனுப்பு", "generate_image": "படம் உருவாக்கு",
-        "tts_play": "AI பதில் இயக்கு (TTS)", "transcribe_and_ask": "எழுத்துருவாக்கம் மற்றும் கேள்வி"
-    }
-    te = {  # Telugu
-        "tab_text": " టెక్స్ట్ చాట్", "tab_img_gen": "చిత్రం జనరేటర్", "tab_img_qa": "చిత్రం ప్రశ్న సమాధానం", "tab_voice": "వాయిస్ చాట్",
-        "refresh": "రిఫ్రెష్", "txt_in": "మీ ప్రశ్నను టైప్ చేయండి:", "send": "పంపు", "generate_image": "చిత్రం సృష్టించు",
-        "tts_play": "AI సమాధానం ప్లే (TTS)", "transcribe_and_ask": "ట్రాన్స్‌క్రైబ్ మరియు అడుగు"
-    }
-    gu = {  # Gujarati
-        "tab_text": " ટેક્સ્ટ ચેટ", "tab_img_gen": "છબી જનરેટર", "tab_img_qa": "છબી પ્રશ્નોત્તર", "tab_voice": "વૉઇસ ચેટ",
-        "refresh": "રિફ્રેશ", "txt_in": "તમારો પ્રશ્ન ટાઇપ કરો:", "send": "મોકલો", "generate_image": "છબી બનાવો",
-        "tts_play": "AI જવાબ પ્લે (TTS)", "transcribe_and_ask": "ટ્રાન્સક્રાઇબ અને પૂછો"
-    }
-    kn = {  # Kannada
-        "tab_text": " ಪಠ್ಯ ಚಾಟ್", "tab_img_gen": "ಚಿತ್ರ ಜನರೇಟರ್", "tab_img_qa": "ಚಿತ್ರ ಪ್ರಶ್ನೋತ್ತರ", "tab_voice": "ಧ್ವನಿ ಚಾಟ್",
-        "refresh": "ರಿಫ್ರೆಶ್", "txt_in": "ನಿಮ್ಮ ಪ್ರಶ್ನೆಯನ್ನು ಟೈಪ್ ಮಾಡಿ:", "send": "ಕಳುಹಿಸಿ", "generate_image": "ಚಿತ್ರ ರಚಿಸಿ",
-        "tts_play": "AI ಉತ್ತರ ಪ್ಲೇ (TTS)", "transcribe_and_ask": "ಟ್ರಾನ್ಸ್‌ಕ್ರೈಬ್ ಮತ್ತು ಕೇಳಿ"
-    }
-    ml = {  # Malayalam
-        "tab_text": " ടെക്സ്റ്റ് ചാറ്റ്", "tab_img_gen": "ചിത്രം ജനറേറ്റർ", "tab_img_qa": "ചിത്രം ചോദ്യോത്തരം", "tab_voice": "വോയ്സ് ചാറ്റ്",
-        "refresh": "റിഫ്രഷ്", "txt_in": "നിങ്ങളുടെ ചോദ്യം ടൈപ്പ് ചെയ്യുക:", "send": "അയയ്ക്കുക", "generate_image": "ചിത്രം സൃഷ്ടിക്കുക",
-        "tts_play": "AI ഉത്തരം പ്ലേ (TTS)", "transcribe_and_ask": "ട്രാൻസ്ക്രൈബ് ചെയ്ത് ചോദിക്കുക"
-    }
-    pa = {  # Punjabi
-        "tab_text": " ਟੈਕਸਟ ਚੈਟ", "tab_img_gen": "ਤਸਵੀਰ ਜਨਰੇਟਰ", "tab_img_qa": "ਤਸਵੀਰ ਸਵਾਲ ਜਵਾਬ", "tab_voice": "ਵਾਇਸ ਚੈਟ",
-        "refresh": "ਰਿਫਰੈਸ਼", "txt_in": "ਆਪਣਾ ਸਵਾਲ ਟਾਈਪ ਕਰੋ:", "send": "ਭੇਜੋ", "generate_image": "ਤਸਵੀਰ ਬਣਾਓ",
-        "tts_play": "AI ਜਵਾਬ ਪਲੇ (TTS)", "transcribe_and_ask": "ਟ੍ਰਾਂਸਕ੍ਰਾਈਬ ਅਤੇ ਪੁੱਛੋ"
-    }
-    ur = {  # Urdu
-        "tab_text": " ٹیکسٹ چیٹ", "tab_img_gen": "تصویر جنریٹر", "tab_img_qa": "تصویر سوال جواب", "tab_voice": "آواز چیٹ",
-        "refresh": "ریفریش", "txt_in": "اپنا سوال ٹائپ کریں:", "send": "بھیجیں", "generate_image": "تصویر بنائیں",
-        "tts_play": "AI جواب پلے (TTS)", "transcribe_and_ask": "ٹرانسکرائب اور پوچھیں"
-    }
-    od = {  # Odia
-        "tab_text": " ପାଠ୍ୟ ଚାଟ୍", "tab_img_gen": "ଚିତ୍ର ଜେନେରେଟର", "tab_img_qa": "ଚିତ୍ର ପ୍ରଶ୍ନୋତ୍ତର", "tab_voice": "ସ୍ୱର ଚାଟ୍",
-        "refresh": "ରିଫ୍ରେସ୍", "txt_in": "ଆପଣଙ୍କ ପ୍ରଶ୍ନ ଟାଇପ୍ କରନ୍ତୁ:", "send": "ପଠାନ୍ତୁ", "generate_image": "ଚିତ୍ର ସୃଷ୍ଟି କରନ୍ତୁ",
-        "tts_play": "AI ଉତ୍ତର ପ୍ଲେ (TTS)", "transcribe_and_ask": "ଟ୍ରାନ୍ସକ୍ରାଇବ୍ ଏବଂ ପଚାରନ୍ତୁ"
-    }
-    as_lang = {  # Assamese
-        "tab_text": " পাঠ চেট", "tab_img_gen": "ছবি জেনাৰেটৰ", "tab_img_qa": "ছবি প্ৰশ্নোত্তৰ", "tab_voice": "কণ্ঠস্বৰ চেট",
-        "refresh": "ৰিফ্ৰেছ", "txt_in": "আপোনাৰ প্ৰশ্ন টাইপ কৰক:", "send": "পঠিয়াওক", "generate_image": "ছবি সৃষ্টি কৰক",
-        "tts_play": "AI উত্তৰ প্লে (TTS)", "transcribe_and_ask": "ট্ৰান্সক্ৰাইব আৰু সোধক"
-    }
-    
-    lang_map = {
-        "Marathi": {**en, **mr}, "Hindi": {**en, **hi}, "Bengali": {**en, **bn},
-        "Tamil": {**en, **ta}, "Telugu": {**en, **te}, "Gujarati": {**en, **gu},
-        "Kannada": {**en, **kn}, "Malayalam": {**en, **ml}, "Punjabi": {**en, **pa},
-        "Urdu": {**en, **ur}, "Odia": {**en, **od}, "Assamese": {**en, **as_lang}
-    }
-    return lang_map.get(language, en)
+    if language == "Marathi":
+        base = {**en, **mr}
+    elif language == "Hindi":
+        base = {**en, **hi}
+    else:
+        base = en
+    return base
 
 # Indian languages BCP-47 codes for SpeechRecognition
 INDIAN_LANG_CODES = {
@@ -634,35 +443,9 @@ INDIAN_LANG_CODES = {
 
 
 def main():
-    """
-    Main application entry point for Exiora AI chatbot.
-    
-    Initializes the Streamlit application with:
-    - Session state management
-    - Page configuration
-    - Settings card rendering
-    - Theme application
-    - Multi-tab interface with localized content
-    
-    Features:
-        - Text Chat with AI models
-        - Image Generation (OpenAI DALL-E)
-        - Image Q&A with vision models
-        - Voice Chat with transcription and TTS
-        - Multi-language support (13 languages)
-        - Light/Dark theme support
-    """
-    # Initialize application state
     _init_state()
-    
-    # Configure Streamlit page
-    st.set_page_config(
-        page_title="Exiora AI - Multimodal Chatbot", 
-        page_icon="🚀", 
-        layout="wide"
-    )
-    
-    # Render settings card and get user preferences
+    st.set_page_config(page_title="GEA-6 Multimodal AI", page_icon="🤖", layout="wide")
+    # Render the new settings card at the top
     model, theme, language = render_settings_card()
     labels = _labels(language)
 
@@ -679,8 +462,7 @@ def main():
         except Exception:
             pass
 
-    st.title("🚀 Exiora AI - Next Gen Multimodal Chatbot")
-    st.caption("**Launched by Saad Sadik Shaikh** | AI & DS Student from Pune")
+    st.title("GEA-6 Next Gen Multimodal AI Chatbot")
     tab1, tab2, tab3, tab4 = st.tabs([labels["tab_text"], labels["tab_img_gen"], labels["tab_img_qa"], labels["tab_voice"]])
 
     # Text Chat
@@ -721,7 +503,7 @@ def main():
             if msg.get("role") == "user":
                 st.markdown(f"<div class='chat-bubble'><b>You:</b> {msg['content']}</div>", unsafe_allow_html=True)
             else:
-                st.markdown(f"<div class='chat-bubble'><b>Exiora AI:</b> {msg['content']}</div>", unsafe_allow_html=True)
+                st.markdown(f"<div class='chat-bubble'><b>GEA6:</b> {msg['content']}</div>", unsafe_allow_html=True)
         # Text-to-speech for last assistant reply
         if st.session_state.get("last_bot"):
             if st.button("Play last reply (TTS)"):
@@ -853,7 +635,7 @@ def main():
                                 st.download_button(
                                     labels["tts_dl_label"],
                                     data=audio_bytes,
-                                    file_name=f"exiora_ai_reply_{datetime.now().strftime('%Y%m%d_%H%M%S')}{ext}",
+                                    file_name=f"gea6_reply_{datetime.now().strftime('%Y%m%d_%H%M%S')}{ext}",
                                     mime=mime,
                                     key="voice_tts_dl_btn"
                                 )
