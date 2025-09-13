@@ -1,0 +1,21 @@
+body {
+  background-color: #ffffff;
+  color: #0a0a0a;
+}
+
+.chat-bubble {
+  background: #f6f8fa;
+  color: #0a0a0a;
+  padding: 12px 14px;
+  border-radius: 10px;
+  margin: 8px 0;
+  border: 1px solid #d0d7de;
+}
+
+.stButton>button {
+  background: #0969da;
+  color: #fff;
+  border: none;
+}
+
+
